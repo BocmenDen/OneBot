@@ -1,19 +1,17 @@
-﻿using Microsoft.EntityFrameworkCore.Metadata.Internal;
-
-namespace OneBot.Models
+﻿namespace OneBot.Models
 {
-    public record class ButtonSend: CollectionBotParameters
+    public record class ButtonSend : CollectionBotParameters
     {
         public string Text { get; }
 
-        public ButtonSend(string text): this(text, null) { }
+        public ButtonSend(string text) : this(text, null) { }
 
-        public ButtonSend(string text, CollectionBotParameters? collectionBotParameters): base(collectionBotParameters)
+        public ButtonSend(string text, CollectionBotParameters? collectionBotParameters) : base(collectionBotParameters)
         {
             Text=text??throw new ArgumentNullException(nameof(text));
         }
 
-        public static implicit operator ButtonSend(string text) => new ButtonSend(text);
+        public static implicit operator ButtonSend(string text) => new(text);
     }
     public readonly struct ButtonSearch(int row, int column, ButtonSend button)
     {

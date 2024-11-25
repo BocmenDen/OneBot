@@ -1,15 +1,15 @@
 ﻿using Microsoft.Extensions.Configuration;
+using OneBot.Attributes;
 using OneBot.Base;
+using OneBot.Extensions;
 using OneBot.Interfaces;
 using OneBot.Models;
 using OneBot.Utils;
-using OneBot.Extensions;
 using System.Text.RegularExpressions;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
-using OneBot.Attributes;
 
 namespace OneBot.Tg
 {
@@ -99,7 +99,9 @@ namespace OneBot.Tg
         private static IReplyMarkup? GetReplyMarkup(SendingClient sendingClient)
             => (IReplyMarkup?)sendingClient.Inline.CreateTgInline() ?? sendingClient.Keyboard.CreateTgReply();
 
+#pragma warning disable IDE0060 // Удалите неиспользуемый параметр
         private Task EditMessage(TgUser<TUser> user, int oldMessage, SendingClient sendingClient, ReceptionClient<TUser>? reception, Func<Func<Task<Message>>, Task> sendMessageSaveId)
+#pragma warning restore IDE0060 // Удалите неиспользуемый параметр
         {
             return sendMessageSaveId(() => BotClient.EditMessageText(user, oldMessage, sendingClient.Message!, replyMarkup: sendingClient.Inline.CreateTgInline(), parseMode: sendingClient.GetParseMode()));
         }

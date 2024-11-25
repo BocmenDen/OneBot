@@ -1,6 +1,6 @@
 ﻿namespace OneBot.Models
 {
-    public record class ButtonsSend: CollectionBotParameters
+    public record class ButtonsSend : CollectionBotParameters
     {
         public IReadOnlyList<IReadOnlyList<ButtonSend>> Buttons { get; }
 

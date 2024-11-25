@@ -1,8 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using OneBot.Base;
+using OneBot.Extensions;
 using OneBot.Models;
 using Telegram.Bot.Types.ReplyMarkups;
-using OneBot.Extensions;
-using OneBot.Base;
 
 namespace OneBot.Tg
 {
@@ -22,7 +22,7 @@ namespace OneBot.Tg
 
         public static Telegram.Bot.Types.Enums.ParseMode GetParseMode(this SendingClient sendingClient)
         {
-            if (sendingClient.TryGetParameter(TgClient.KeyParseMode, out Telegram.Bot.Types.Enums.ParseMode parseMode)) 
+            if (sendingClient.TryGetParameter(TgClient.KeyParseMode, out Telegram.Bot.Types.Enums.ParseMode parseMode))
                 return parseMode;
             return Telegram.Bot.Types.Enums.ParseMode.None;
         }

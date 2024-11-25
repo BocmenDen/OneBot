@@ -18,7 +18,7 @@
         public bool ContainsKey(string key) => _otherParameters.ContainsKey(key);
         public bool TryGetParameter<T>(string key, out T? value)
         {
-            if(_otherParameters.TryGetValue(key, out object? valueO) && valueO is T valueR)
+            if (_otherParameters.TryGetValue(key, out object? valueO) && valueO is T valueR)
             {
                 value = valueR;
                 return true;

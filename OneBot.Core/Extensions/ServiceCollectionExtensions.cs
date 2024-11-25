@@ -2,7 +2,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using OneBot.Attributes;
 using OneBot.Base;
-using OneBot.Models;
 using OneBot.Utils;
 using System.Reflection;
 

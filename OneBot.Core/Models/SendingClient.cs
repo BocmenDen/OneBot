@@ -1,6 +1,6 @@
 ﻿namespace OneBot.Models
 {
-    public record class SendingClient: CollectionBotParameters
+    public record class SendingClient : CollectionBotParameters
     {
         private IReadOnlyList<MediaSource>? _medias;
 

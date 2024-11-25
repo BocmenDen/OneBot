@@ -4,12 +4,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OneBot.Base;
 using OneBot.Extensions;
-using OneBot.Models;
 using System.Reflection;
 
 namespace OneBot
 {
-    public class ContextBot<TUser, TDB>() where TUser: BaseUser where TDB : UsersDB<TUser>
+    public class ContextBot<TUser, TDB>() where TUser : BaseUser where TDB : UsersDB<TUser>
     {
         public IHost Host { get; private set; } = null!;
         public Action<DbContextOptionsBuilder> ContextBuilder = null!;
@@ -37,7 +36,7 @@ namespace OneBot
                     }
                 }
                 bindsServices?.Invoke(services);
-            }).Build();            
+            }).Build();
         }
 
         private T IsInitInvoke<T>(Func<T> func)
