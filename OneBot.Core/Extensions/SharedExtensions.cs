@@ -7,7 +7,8 @@ namespace OneBot.Extensions
     {
         public static T CreateElementAndReload<T>(this DbContext context, T value, DbSet<T> table) where T : class
         {
-            _ = table.Add(value);
+            var entity = table.Add(value);
+            entity.State = EntityState.Detached;
             context.SaveChanges();
             return value;
         }
