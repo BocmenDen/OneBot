@@ -1,17 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
-using OneBot.Models;
+﻿using OneBot.Models;
 
 namespace OneBot.Extensions
 {
     public static class SharedExtensions
     {
-        public static T CreateElementAndReload<T>(this DbContext context, T value, DbSet<T> table) where T : class
-        {
-            var entity = table.Add(value);
-            entity.State = EntityState.Detached;
-            context.SaveChanges();
-            return value;
-        }
         public static T GetOrInstance<T>(this CollectionBotParameters collection, string key, Func<T> create) where T : class
         {
             if (collection.TryGetParameter(key, out T? value)) return value!;
