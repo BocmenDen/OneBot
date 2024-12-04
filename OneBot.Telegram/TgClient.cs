@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using OneBot.Attributes;
 using OneBot.Base;
 using OneBot.Extensions;
@@ -124,14 +125,18 @@ namespace OneBot.Tg
         private TgUser<TUser> LoadUser(long chatId)
         {
             using var db = _contextBot.GetService<TDB>();
-            var TelegramUser = db.TgUsers.Find(chatId);
-            if (TelegramUser != null) return TelegramUser!;
+            var telegramUser = db.TgUsers.Find(chatId);
+            if (telegramUser != null)
+            {
+                telegramUser.User ??= db.Users.Find(telegramUser.UserId)!;
+                return telegramUser!;
+            }
             var user = BaseUserUtil.CreateEmptyUser<TUser>();
-            TelegramUser = new TgUser<TUser>(chatId, user);
-            db.TgUsers.Add(TelegramUser);
+            telegramUser = new TgUser<TUser>(chatId, user);
+            db.TgUsers.Add(telegramUser);
             db.SaveChanges();
-            _logger.Info($"Добавлен новый пользователь [{TelegramUser.ChatId}]");
-            return TelegramUser;
+            _logger.Info($"Добавлен новый пользователь [{telegramUser.ChatId}]");
+            return telegramUser;
         }
 
         public static long? GetChatId(Update update)
