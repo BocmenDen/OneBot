@@ -124,7 +124,7 @@ namespace OneBot.Tg
         private TgUser<TUser> LoadUser(long chatId)
         {
             using var db = _contextBot.GetService<TDB>();
-            var TelegramUser = db.GetTGUser(chatId);
+            var TelegramUser = db.TgUsers.Find(chatId);
             if (TelegramUser != null) return TelegramUser!;
             var user = BaseUserUtil.CreateEmptyUser<TUser>();
             TelegramUser = new TgUser<TUser>(chatId, user);
