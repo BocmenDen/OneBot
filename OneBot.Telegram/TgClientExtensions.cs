@@ -72,7 +72,7 @@ namespace OneBot.Tg
         {
             if(media.TryGetParameter(TgClient.KeyMediaSourceFileId, out string? id)) return new (InputFile.FromFileId(id!));
             var stream = await media.GetStream();
-            return new FileTG(stream, () => stream.Dispose());
+            return new FileTG(InputFile.FromStream(stream, media.Name), () => stream.Dispose());
         }
 
         public class FileTG(InputFile file, Action? disponse = null) : IDisposable
