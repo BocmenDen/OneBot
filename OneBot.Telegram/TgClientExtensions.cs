@@ -2,6 +2,7 @@
 using OneBot.Base;
 using OneBot.Extensions;
 using OneBot.Models;
+using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 
 namespace OneBot.Tg
@@ -65,6 +66,23 @@ namespace OneBot.Tg
                 ResizeKeyboard = true
                 // TODO Parameters
             };
+        }
+
+        internal static async Task<FileTG> GetFile(this MediaSource media)
+        {
+            if(media.TryGetParameter(TgClient.KeyMediaSourceFileId, out string? id)) return new (InputFile.FromFileId(id!));
+            var stream = await media.GetStream();
+            return new FileTG(stream, () => stream.Dispose());
+        }
+
+        public class FileTG(InputFile file, Action? disponse = null) : IDisposable
+        {
+            public InputFile File { get; private set; } = file??throw new ArgumentNullException(nameof(file));
+            private readonly Action? _disponse = disponse;
+
+            public void Dispose() => _disponse?.Invoke();
+
+            public static implicit operator InputFile(FileTG fileTG) => fileTG.File;
         }
     }
 }

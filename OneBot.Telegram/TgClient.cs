@@ -60,7 +60,7 @@ namespace OneBot.Tg
                 )
             {
                 OriginalMessage = update,
-                Message = update?.Message?.Text,
+                Message = update?.Message?.Text ?? update?.Message?.Caption,
                 Medias = media,
                 Command = command
             });
@@ -86,7 +86,9 @@ namespace OneBot.Tg
             {
                 foreach (var doc in sendingClient.Medias)
                 {
-                    await BotClient.SendDocument(user, InputFile.FromStream(await doc.GetStream(), doc.Name), caption: sendingClient.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(sendingClient), parseMode: sendingClient.GetParseMode());
+                    using var file = await doc.GetFile();
+                    var message = await BotClient.SendDocument(user, file, caption: sendingClient.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(sendingClient), parseMode: sendingClient.GetParseMode());
+                    doc[TgClient.KeyMediaSourceFileId] = message.Document!.FileId;
                 }
                 return;
             }
@@ -196,12 +198,12 @@ namespace OneBot.Tg
                     await BotClient.DownloadFile(file.FilePath!, streamWriter);
                     streamWriter.Position = 0;
                     return streamWriter;
-                })
+                }, new(){ { TgClient.KeyMediaSourceFileId, update.Message.Document.FileId } })
                 {
                     Name = update.Message.Document.FileName,
                     Type = Path.GetExtension(update.Message.Document.FileName),
                     MimeType = update.Message.Document.MimeType,
-                    Id = update.Message.Document.FileId,
+                    Id = update.Message.Document.FileId
                 });
             } // TODO остальные медиаданные
             if (mediaSources.Count!=0) return mediaSources;
@@ -226,5 +228,7 @@ namespace OneBot.Tg
         public const string KeySettingTOKEN = "tg_token";
         public const string MessegesToEdit = "tg_messagesToEdit";
         public const string KeyParseMode = "tg_parseMode";
+
+        public const string KeyMediaSourceFileId = "tg_fileId";
     }
 }
