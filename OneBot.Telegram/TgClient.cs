@@ -190,7 +190,7 @@ namespace OneBot.Tg
                 receptionType |= ReceptionType.Media;
                 mediaSources.Add(new MediaSource(async () =>
                 {
-                    string path = Path.Combine(Path.GetTempPath(), update.Message.Document.FileName!);
+                    string path = Path.Combine(Path.GetTempPath(), Path.GetTempFileName() + update.Message.Document.FileName!);
                     var streamWriter = System.IO.File.Open(path, FileMode.OpenOrCreate);
                     var file = await BotClient.GetFile(update.Message?.Document.FileId!);
                     await BotClient.DownloadFile(file.FilePath!, streamWriter);
