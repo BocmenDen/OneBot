@@ -1,8 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using OneBot.Attributes;
 using OneBot.Base;
-using OneBot.Extensions;
 using OneBot.Interfaces;
 using OneBot.Models;
 using OneBot.Utils;
@@ -20,28 +19,31 @@ namespace OneBot.Tg
     {
         private static readonly Regex _parseCommand = GetParseCommandRegex();
         private readonly ContextBot<TUser, TDB> _contextBot;
-        private readonly int _id;
-        private readonly ILogger? _logger;
+        private readonly ILogger<TgClient<TUser, TDB>>? _logger;
         public readonly TelegramBotClient BotClient;
         private readonly ReceiverOptions? _receiverOptions;
+        private EventId _eventId;
 
+        public int Id { get; private set; }
         public event Action<ReceptionClient<TUser>>? Update;
-        public int Id => _id;
 
-        public TgClient(ContextBot<TUser, TDB> contextBot, IConfiguration configuration, ILogger? logger = null, ReceiverOptions? receiverOptions = null)
+        public TgClient(ContextBot<TUser, TDB> contextBot, IConfiguration configuration, ILogger<TgClient<TUser, TDB>>? logger = null, ReceiverOptions? receiverOptions = null)
         {
             _contextBot=contextBot??throw new ArgumentNullException(nameof(contextBot));
             string token = configuration[TgClient.KeySettingTOKEN] ?? throw new Exception("Отсутствует токен для создания клиента Telegram");
-            _id = SharedUtils.CalculeteID<TgClient<TUser, TDB>>(token);
-            _logger = logger.CacheSender(_id);
+            Id = token.GetHashCode();
             BotClient = new TelegramBotClient(token);
             _receiverOptions = receiverOptions;
+            _logger = logger;
+            _eventId = new EventId(Id);
         }
 
         public async Task Run(CancellationToken token = default)
         {
             Task task = BotClient.ReceiveAsync(HandleUpdateAsync, HandleErrorAsync, _receiverOptions, cancellationToken: token);
-            _logger.Info($"Бот {(await BotClient.GetMyName(cancellationToken: token)).Name} запущен");
+            string botName = (await BotClient.GetMyName(cancellationToken: token)).Name;
+            _logger?.LogInformation("Бот {0} запущен", botName);
+            _eventId = new EventId(Id, botName);
             await task;
         }
 
@@ -71,7 +73,7 @@ namespace OneBot.Tg
         {
             if (sendingClient.Message == null)
             {
-                _logger.Warning("Поддерживается пока только отправка текстовых сообщений");
+                _logger?.LogWarning(_eventId, "Поддерживается пока только отправка текстовых сообщений");
                 return;
             }
 
@@ -120,7 +122,7 @@ namespace OneBot.Tg
 
         private Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
         {
-            _logger.Error(exception.ToString());
+            _logger?.LogError(_eventId, exception, "Внутренняя ошибка обработки сообщений");
             return Task.CompletedTask;
         }
 
@@ -137,7 +139,7 @@ namespace OneBot.Tg
             telegramUser = new TgUser<TUser>(chatId, user);
             db.TgUsers.Add(telegramUser);
             db.SaveChanges();
-            _logger.Info($"Добавлен новый пользователь [{telegramUser.ChatId}]");
+            _logger?.LogInformation(_eventId, "Добавлен новый пользователь [{userTg}]", telegramUser);
             return telegramUser;
         }
 

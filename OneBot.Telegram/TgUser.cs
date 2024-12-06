@@ -26,5 +26,7 @@ namespace OneBot.Tg
         }
 
         public static implicit operator ChatId(TgUser<TUser> tgUser) => tgUser.ChatId;
+
+        public override string ToString() => $"Chat: {ChatId} User -> {User}";
     }
 }

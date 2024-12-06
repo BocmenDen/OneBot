@@ -16,11 +16,11 @@ namespace OneBot
         public object GetService(Type type) => IsInitInvoke(() => Host.Services.GetService(type))!;
         public T GetService<T>() where T : class => IsInitInvoke(() => Host.Services.GetService<T>())!;
 
-        public void Init(Action<DbContextOptionsBuilder> contextBuilder, Action<IConfigurationBuilder>? builderConfig = null, Action<IServiceCollection>? bindsServices = null, IEnumerable<Assembly>? servicesDetect = null)
+        public void Init(Action<DbContextOptionsBuilder> contextBuilder, Action<IConfigurationBuilder>? builderConfig = null, Action<IServiceCollection>? bindsServices = null, IEnumerable<Assembly>? servicesDetect = null, Action<IHostBuilder>? hostBuilder = null)
         {
             servicesDetect ??= [];
             ContextBuilder = contextBuilder;
-            Host = Microsoft.Extensions.Hosting.Host.
+            var builder = Microsoft.Extensions.Hosting.Host.
             CreateDefaultBuilder()
             .UseContentRoot(AppContext.BaseDirectory)
             .ConfigureAppConfiguration(x => builderConfig?.Invoke(x))
@@ -36,7 +36,9 @@ namespace OneBot
                     }
                 }
                 bindsServices?.Invoke(services);
-            }).Build();
+            });
+            hostBuilder?.Invoke(builder);
+            Host = builder.Build();
         }
 
         private T IsInitInvoke<T>(Func<T> func)
