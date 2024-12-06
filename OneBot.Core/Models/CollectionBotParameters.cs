@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace OneBot.Models
 {
-    public record class CollectionBotParameters: IDictionary<string, object>
+    public record class CollectionBotParameters : IDictionary<string, object>
     {
         private readonly Dictionary<string, object> _otherParameters = [];
 
@@ -23,7 +23,7 @@ namespace OneBot.Models
 
         public CollectionBotParameters(Dictionary<string, object>? otherParameters = null)
             => _otherParameters=otherParameters ?? [];
-        public CollectionBotParameters(IEnumerable<KeyValuePair<string, object>> collection):this(new Dictionary<string, object>(collection)) { }
+        public CollectionBotParameters(IEnumerable<KeyValuePair<string, object>> collection) : this(new Dictionary<string, object>(collection)) { }
         public CollectionBotParameters(CollectionBotParameters? collectionBot)
             => _otherParameters=collectionBot?._otherParameters ?? [];
 

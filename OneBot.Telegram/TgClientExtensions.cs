@@ -70,7 +70,7 @@ namespace OneBot.Tg
 
         internal static async Task<FileTG> GetFile(this MediaSource media)
         {
-            if(media.TryGetParameter(TgClient.KeyMediaSourceFileId, out string? id)) return new (InputFile.FromFileId(id!));
+            if (media.TryGetParameter(TgClient.KeyMediaSourceFileId, out string? id)) return new(InputFile.FromFileId(id!));
             var stream = await media.GetStream();
             return new FileTG(InputFile.FromStream(stream, media.Name), () => stream.Dispose());
         }

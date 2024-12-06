@@ -42,7 +42,7 @@ namespace OneBot.Tg
         {
             Task task = BotClient.ReceiveAsync(HandleUpdateAsync, HandleErrorAsync, _receiverOptions, cancellationToken: token);
             string botName = (await BotClient.GetMyName(cancellationToken: token)).Name;
-            _logger?.LogInformation("Бот {0} запущен", botName);
+            _logger?.LogInformation("Бот {botName} запущен", botName);
             _eventId = new EventId(Id, botName);
             await task;
         }
@@ -200,7 +200,7 @@ namespace OneBot.Tg
                     await BotClient.DownloadFile(file.FilePath!, streamWriter);
                     streamWriter.Position = 0;
                     return streamWriter;
-                }, new(){ { TgClient.KeyMediaSourceFileId, update.Message.Document.FileId } })
+                }, new() { { TgClient.KeyMediaSourceFileId, update.Message.Document.FileId } })
                 {
                     Name = update.Message.Document.FileName,
                     Type = Path.GetExtension(update.Message.Document.FileName),
