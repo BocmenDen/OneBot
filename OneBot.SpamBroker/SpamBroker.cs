@@ -30,8 +30,7 @@ namespace OneBot.SpamBroker
             DateTime now = DateTime.UtcNow;
 
             var events = _eventHistory.GetOrAdd(identifier, _ => new ConcurrentQueue<DateTime>());
-            while (events.TryPeek(out DateTime timestamp) && (now - timestamp) > timeWindow)
-                events.TryDequeue(out _);
+            ClearHistoryForKey(events, now);
             events.Enqueue(now);
             if (events.Count > maxEvent)
             {
@@ -52,10 +51,12 @@ namespace OneBot.SpamBroker
             CheckInit();
             int countUsers = 0;
             countAll = 0;
+            DateTime now = DateTime.UtcNow;
             foreach (var key in _eventHistory.Keys.ToArray())
             {
                 if (_eventHistory.TryGetValue(key, out var events))
                 {
+                    ClearHistoryForKey(events, now);
                     if (events.IsEmpty)
                     {
                         _eventHistory.TryRemove(key, out _);
@@ -66,6 +67,11 @@ namespace OneBot.SpamBroker
                 }
             }
             return countUsers;
+        }
+        private void ClearHistoryForKey(ConcurrentQueue<DateTime> hostory, DateTime now)
+        {
+            while (hostory.TryPeek(out DateTime timestamp) && (now - timestamp) > timeWindow)
+                hostory.TryDequeue(out _);
         }
     }
 }
