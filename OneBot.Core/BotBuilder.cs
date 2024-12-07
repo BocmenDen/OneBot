@@ -39,7 +39,7 @@ namespace OneBot
 
         public static IHostBuilder RegisterServices(this IHostBuilder builder, Assembly? assembly)
         {
-            if(assembly == null) return builder;
+            if (assembly == null) return builder;
             builder.ConfigureServices((context, services) =>
             {
                 foreach (var implementationType in assembly.GetTypes())

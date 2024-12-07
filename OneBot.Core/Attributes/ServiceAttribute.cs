@@ -7,7 +7,7 @@
     }
 
     [AttributeUsage(AttributeTargets.Class)]
-    public class ServiceAttribute<T>: ServiceAttribute
+    public class ServiceAttribute<T> : ServiceAttribute
     {
     }
 

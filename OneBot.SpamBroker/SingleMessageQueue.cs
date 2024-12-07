@@ -43,5 +43,27 @@ namespace OneBot.SpamBroker
         {
             _eventHistory.TryRemove(getValue(message), out bool _);
         }
+
+        public Metric GetMetric()
+        {
+            int countAll = 0;
+            int forbiddenSpam = 0;
+            foreach (var key in _eventHistory.Keys.ToArray())
+            {
+                if (_eventHistory.TryGetValue(key, out bool state))
+                {
+                    if (state) forbiddenSpam++;
+                    countAll++;
+                }
+            }
+            return new Metric(countAll, forbiddenSpam);
+        }
+
+        public readonly struct Metric(int countAll, int countForbiddenSpam)
+        {
+            public readonly int CountAll = countAll;
+            public readonly int CountForbiddenSpam = countForbiddenSpam;
+            public readonly int CountForbidden => CountAll - CountForbiddenSpam;
+        }
     }
 }

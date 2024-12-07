@@ -1,4 +1,6 @@
-﻿namespace OneBot.Models
+﻿using System.Text;
+
+namespace OneBot.Models
 {
     public record class SendingClient : CollectionBotParameters
     {
@@ -14,6 +16,7 @@
         }
 
         public static implicit operator SendingClient(string text) => new() { Message = text };
+        public static implicit operator SendingClient(StringBuilder builder) => builder.ToString();
 
         public static SendingClient operator +(SendingClient sending, string text) => sending.Message += text;
     }

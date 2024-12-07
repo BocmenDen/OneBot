@@ -8,6 +8,7 @@ namespace OneBot.SpamBroker
     public class BlackList<TUser>(ILogger<BlackList<TUser>>? logger) : ISpam<TUser> where TUser : BaseUser
     {
         private readonly ConcurrentDictionary<int, DateTime> _blackList = new();
+        public int Count => _blackList.Count;
 
         public StateSpam GetSpamState(ReceptionClient<TUser> message)
         {

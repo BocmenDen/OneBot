@@ -46,11 +46,13 @@ namespace OneBot.SpamBroker
             return StateSpam.Allowed;
         }
 
-        public int CleanupEmptyHistory()
+        public int CleanupEmptyHistory() => CleanupEmptyHistory(out int _);
+        public int CleanupEmptyHistory(out int countAll)
         {
             CheckInit();
             int countUsers = 0;
-            foreach (var key in _eventHistory.Keys.ToList())
+            countAll = 0;
+            foreach (var key in _eventHistory.Keys.ToArray())
             {
                 if (_eventHistory.TryGetValue(key, out var events))
                 {
@@ -58,8 +60,9 @@ namespace OneBot.SpamBroker
                     {
                         _eventHistory.TryRemove(key, out _);
                         countUsers++;
-                        logger?.LogInformation($"История пользователя с ключом {key} была удалена для экономии памяти");
+                        logger?.LogInformation("История пользователя с ключом {key} была удалена для экономии памяти", key);
                     }
+                    countAll += events.Count;
                 }
             }
             return countUsers;
