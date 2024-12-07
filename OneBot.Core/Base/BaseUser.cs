@@ -13,5 +13,7 @@ namespace OneBot.Base
         public BaseUser(int id) => Id = id;
 
         public virtual BaseUser CreateEmpty() => new();
+
+        public override string ToString() => $"UserId: {Id}";
     }
 }

@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OneBot.Core\OneBot.csproj" />
+    <ProjectReference Include="..\OneBot.SpamBroker\OneBot.SpamBroker.csproj" />
     <ProjectReference Include="..\OneBot.Telegram\OneBot.Tg.csproj" />
   </ItemGroup>
 

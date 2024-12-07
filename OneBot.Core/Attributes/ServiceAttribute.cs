@@ -1,13 +1,21 @@
 ﻿namespace OneBot.Attributes
 {
     [AttributeUsage(AttributeTargets.Class)]
-    public class ServiceAttribute(bool isSingltone = true) : Attribute
+    public class ServiceAttribute : Attribute
     {
-        public readonly bool IsSingltone = isSingltone;
+        public ServiceType Type = ServiceType.Singltone;
     }
 
     [AttributeUsage(AttributeTargets.Class)]
-    public class ServiceAttribute<T>(bool isSingltone = true) : ServiceAttribute(isSingltone)
+    public class ServiceAttribute<T>: ServiceAttribute
     {
+    }
+
+    public enum ServiceType
+    {
+        Singltone,
+        Scoped,
+        AddTransient,
+        DbContextPool
     }
 }

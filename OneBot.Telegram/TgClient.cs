@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OneBot.Attributes;
 using OneBot.Base;
@@ -14,11 +15,10 @@ using Telegram.Bot.Types.ReplyMarkups;
 namespace OneBot.Tg
 {
     [Service]
-    [ServiceGenericInfo(TypesGeneric.DB | TypesGeneric.User)]
-    public partial class TgClient<TUser, TDB> : IClientBot<TUser> where TUser : BaseUser where TDB : UsersDB<TUser>, IDBTg<TUser>
+    public partial class TgClient<TUser, TDB> : IClientBot<TUser> where TUser : BaseUser where TDB : BaseDB<TUser>, IDBTg<TUser>
     {
         private static readonly Regex _parseCommand = GetParseCommandRegex();
-        private readonly ContextBot<TUser, TDB> _contextBot;
+        private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<TgClient<TUser, TDB>>? _logger;
         public readonly TelegramBotClient BotClient;
         private readonly ReceiverOptions? _receiverOptions;
@@ -27,9 +27,9 @@ namespace OneBot.Tg
         public int Id { get; private set; }
         public event Action<ReceptionClient<TUser>>? Update;
 
-        public TgClient(ContextBot<TUser, TDB> contextBot, IConfiguration configuration, ILogger<TgClient<TUser, TDB>>? logger = null, ReceiverOptions? receiverOptions = null)
+        public TgClient(IServiceProvider serviceProvider, IConfiguration configuration, ILogger<TgClient<TUser, TDB>>? logger = null, ReceiverOptions? receiverOptions = null)
         {
-            _contextBot=contextBot??throw new ArgumentNullException(nameof(contextBot));
+            _serviceProvider=serviceProvider??throw new ArgumentNullException(nameof(serviceProvider));
             string token = configuration[TgClient.KeySettingTOKEN] ?? throw new Exception("Отсутствует токен для создания клиента Telegram");
             Id = token.GetHashCode();
             BotClient = new TelegramBotClient(token);
@@ -128,7 +128,7 @@ namespace OneBot.Tg
 
         private TgUser<TUser> LoadUser(long chatId)
         {
-            using var db = _contextBot.GetService<TDB>();
+            using var db = _serviceProvider.GetRequiredService<TDB>();
             var telegramUser = db.TgUsers.Find(chatId);
             if (telegramUser != null)
             {
