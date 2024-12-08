@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OneBot.Attributes;
@@ -15,27 +17,27 @@ using Telegram.Bot.Types.ReplyMarkups;
 namespace OneBot.Tg
 {
     [Service]
-    public partial class TgClient<TUser, TDB> : IClientBot<TUser> where TUser : BaseUser where TDB : BaseDB<TUser>, IDBTg<TUser>
+    public partial class TgClient<TUser, TDB> : IClientBot<TUser>, IDisposable where TUser : BaseUser where TDB : BaseDB<TUser>, IDBTg<TUser>
     {
         private static readonly Regex _parseCommand = GetParseCommandRegex();
-        private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<TgClient<TUser, TDB>>? _logger;
         public readonly TelegramBotClient BotClient;
         private readonly ReceiverOptions? _receiverOptions;
         private EventId _eventId;
+        private readonly TDB _database;
 
         public int Id { get; private set; }
         public event Action<ReceptionClient<TUser>>? Update;
 
-        public TgClient(IServiceProvider serviceProvider, IConfiguration configuration, ILogger<TgClient<TUser, TDB>>? logger = null, ReceiverOptions? receiverOptions = null)
+        public TgClient(IConfiguration configuration, IDbContextFactory<TDB> factoryDB, ILogger<TgClient<TUser, TDB>>? logger = null, ReceiverOptions? receiverOptions = null)
         {
-            _serviceProvider=serviceProvider??throw new ArgumentNullException(nameof(serviceProvider));
             string token = configuration[TgClient.KeySettingTOKEN] ?? throw new Exception("Отсутствует токен для создания клиента Telegram");
             Id = token.GetHashCode();
             BotClient = new TelegramBotClient(token);
             _receiverOptions = receiverOptions;
             _logger = logger;
             _eventId = new EventId(Id);
+            _database=factoryDB.CreateDbContext();
         }
 
         public async Task Run(CancellationToken token = default)
@@ -128,17 +130,16 @@ namespace OneBot.Tg
 
         private TgUser<TUser> LoadUser(long chatId)
         {
-            using var db = _serviceProvider.GetRequiredService<TDB>();
-            var telegramUser = db.TgUsers.Find(chatId);
+            var telegramUser = _database.TgUsers.Find(chatId);
             if (telegramUser != null)
             {
-                telegramUser.User ??= db.Users.Find(telegramUser.UserId)!;
+                telegramUser.User ??= _database.Users.Find(telegramUser.UserId)!;
                 return telegramUser!;
             }
             var user = BaseUserUtil.CreateEmptyUser<TUser>();
             telegramUser = new TgUser<TUser>(chatId, user);
-            db.TgUsers.Add(telegramUser);
-            db.SaveChanges();
+            _database.TgUsers.Add(telegramUser);
+            _database.SaveChanges();
             _logger?.LogInformation(_eventId, "Добавлен новый пользователь [{userTg}]", telegramUser);
             return telegramUser;
         }
@@ -223,6 +224,12 @@ namespace OneBot.Tg
 
         [GeneratedRegex(@"^/(\w+)(@\w+)?$", RegexOptions.Compiled)]
         private static partial Regex GetParseCommandRegex();
+
+        public void Dispose()
+        {
+            _database.Dispose();
+            GC.SuppressFinalize(this);
+        }
     }
 
     public static class TgClient

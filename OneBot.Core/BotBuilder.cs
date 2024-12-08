@@ -18,6 +18,13 @@ namespace OneBot
                 null,
                 [typeof(IServiceCollection), typeof(Action<DbContextOptionsBuilder>), typeof(int)],
                 null)!;
+        private static readonly MethodInfo AddDbContextFactoryMethod = typeof(EntityFrameworkServiceCollectionExtensions).GetMethod(
+            nameof(EntityFrameworkServiceCollectionExtensions.AddDbContextFactory),
+            1,
+            BindingFlags.Public | BindingFlags.Static,
+            null,
+            [typeof(IServiceCollection), typeof(Action<DbContextOptionsBuilder>), typeof(ServiceLifetime)],
+            null)!;
 
         public static IHostBuilder CreateDefaultBuilder() => Host.CreateDefaultBuilder();
 
@@ -47,14 +54,14 @@ namespace OneBot
                     Attribute? attr;
                     Type type = implementationType;
 
-                    attr = implementationType.GetCustomAttribute(typeof(ServiceAttribute<>));
+                    attr = implementationType.GetCustomAttribute(typeof(ServiceAttribute<>), false);
                     if (attr != null)
                     {
                         type = attr.GetType().GenericTypeArguments[0];
                     }
                     else
                     {
-                        attr = implementationType.GetCustomAttribute(typeof(ServiceAttribute));
+                        attr = implementationType.GetCustomAttribute(typeof(ServiceAttribute), false);
                         if (attr == null) continue;
                     }
                     switch (((ServiceAttribute)attr).Type)
@@ -74,6 +81,8 @@ namespace OneBot
                                 var method = AddDbContextPoolMethod.MakeGenericMethod(type);
                                 Action<DbContextOptionsBuilder> dbBuilderApplayConfig = (b) => dbBuilder(context.Configuration, b);
                                 method.Invoke(null, [services, dbBuilderApplayConfig, 1024]);
+                                method = AddDbContextFactoryMethod.MakeGenericMethod(type);
+                                method.Invoke(null, [services, dbBuilderApplayConfig, ServiceLifetime.Singleton]);
                             }
                             break;
                     }
