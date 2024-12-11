@@ -57,7 +57,7 @@ namespace OneBot.Tg
             if (Update == null) return Task.CompletedTask;
             if (!TryGetInfoUser(update, out long? chatId, out TgUser<TUser>? user)) return Task.CompletedTask;
             var media = GetMedias(update, out var flagType);
-            var command = TgClient<TUser, TDB>.ParseCommand(update?.Message?.Text);
+            var command = TgClient<TUser, TDB>.ParseCommand(update?.Message?.Text ?? update?.Message?.Caption);
             Update?.Invoke(new ReceptionClient<TUser>(this, user!.User,
                 (d, r) => Send(user, d, r),
                 TgClient<TUser, TDB>.GetReceptionType(update!) | flagType | (command == null ? ReceptionType.None : ReceptionType.Command)
@@ -91,8 +91,17 @@ namespace OneBot.Tg
                 foreach (var doc in sendingClient.Medias)
                 {
                     using var file = await doc.GetFile();
-                    var message = await BotClient.SendDocument(user, file, caption: sendingClient.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(sendingClient), parseMode: sendingClient.GetParseMode());
-                    doc[TgClient.KeyMediaSourceFileId] = message.Document!.FileId;
+                    Message? message;
+                    if (doc.Name?.Contains(".mp4") ?? false)
+                    {
+                        message = await BotClient.SendVideo(user, file, caption: sendingClient.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(sendingClient), parseMode: sendingClient.GetParseMode());
+                        doc[TgClient.KeyMediaSourceFileId] = message.Video!.FileId;
+                    }
+                    else
+                    {
+                        message = await BotClient.SendDocument(user, file, caption: sendingClient.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(sendingClient), parseMode: sendingClient.GetParseMode());
+                        doc[TgClient.KeyMediaSourceFileId] = message.Document!.FileId;
+                    }
                 }
                 return;
             }
@@ -191,26 +200,37 @@ namespace OneBot.Tg
             List<MediaSource> mediaSources = [];
             receptionType = ReceptionType.None;
             if (update.Message?.Document != null)
+                AddMedia(mediaSources, update.Message.Document, update.Message.Document.FileName, update.Message.Document.MimeType);
+            else if (update.Message?.Animation != null)
+                AddMedia(mediaSources, update.Message.Animation, update.Message.Animation.FileName, update.Message.Animation.MimeType);
+            else if(update.Message?.Video != null)
+                AddMedia(mediaSources, update.Message.Video, update.Message.Video.FileName, update.Message.Video.MimeType);
+            if (mediaSources.Count!=0)
             {
-                receptionType |= ReceptionType.Media;
-                mediaSources.Add(new MediaSource(async () =>
-                {
-                    string path = Path.Combine(Path.GetTempPath(), Path.GetTempFileName() + update.Message.Document.FileName!);
-                    var streamWriter = System.IO.File.Open(path, FileMode.OpenOrCreate);
-                    var file = await BotClient.GetFile(update.Message?.Document.FileId!);
-                    await BotClient.DownloadFile(file.FilePath!, streamWriter);
-                    streamWriter.Position = 0;
-                    return streamWriter;
-                }, new() { { TgClient.KeyMediaSourceFileId, update.Message.Document.FileId } })
-                {
-                    Name = update.Message.Document.FileName,
-                    Type = Path.GetExtension(update.Message.Document.FileName),
-                    MimeType = update.Message.Document.MimeType,
-                    Id = update.Message.Document.FileId
-                });
-            } // TODO остальные медиаданные
-            if (mediaSources.Count!=0) return mediaSources;
+                receptionType = ReceptionType.Media;
+                return mediaSources;
+            }
             return null;
+        }
+
+        private void AddMedia(List<MediaSource> medias,  FileBase? fileBase, string? fileName, string? mimeType)
+        {
+            if (fileBase == null) return;
+            medias.Add(new MediaSource(async () =>
+            {
+                string path = Path.Combine(Path.GetTempPath(), Path.GetTempFileName() + fileName);
+                var streamWriter = System.IO.File.Open(path, FileMode.OpenOrCreate);
+                var file = await BotClient.GetFile(fileBase.FileId!);
+                await BotClient.DownloadFile(file.FilePath!, streamWriter);
+                streamWriter.Position = 0;
+                return streamWriter;
+            }, new() { { TgClient.KeyMediaSourceFileId, fileBase.FileId } })
+            {
+                Name = fileName,
+                Type = Path.GetExtension(fileName),
+                MimeType = mimeType,
+                Id = fileBase.FileId
+            });
         }
 
         private static string? ParseCommand(string? text)
