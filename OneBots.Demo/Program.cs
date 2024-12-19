@@ -23,8 +23,8 @@ var tgClient = service.GetRequiredService<TgClient<BaseUser, DataBase>>();
 var spamFilter = host.Services.GetRequiredService<MessageSpam<BaseUser>>();
 tgClient.RegisterUpdateHadler(spamFilter.HandleCommand);
 
-spamFilter.Init(async (update) =>
+spamFilter.Init(async (context) =>
 {
-    await update.Send(update.Message ?? "Вы отправили пустое сообщение");
+    await context.Send(context.Update.Message ?? "Вы отправили пустое сообщение");
 });
 tgClient.Run().Wait();

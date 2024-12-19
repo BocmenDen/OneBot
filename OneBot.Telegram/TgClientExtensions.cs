@@ -21,14 +21,14 @@ namespace OneBot.Tg
             return modelBuilder;
         }
 
-        public static Telegram.Bot.Types.Enums.ParseMode GetParseMode(this SendingClient sendingClient)
+        public static Telegram.Bot.Types.Enums.ParseMode GetParseMode(this SendModel sendingClient)
         {
             if (sendingClient.TryGetParameter(TgClient.KeyParseMode, out Telegram.Bot.Types.Enums.ParseMode parseMode))
                 return parseMode;
             return Telegram.Bot.Types.Enums.ParseMode.None;
         }
 
-        public static SendingClient TgSetParseMode(this SendingClient sendingClient, Telegram.Bot.Types.Enums.ParseMode parseMode)
+        public static SendModel TgSetParseMode(this SendModel sendingClient, Telegram.Bot.Types.Enums.ParseMode parseMode)
         {
             sendingClient[TgClient.KeyParseMode] = parseMode;
             return sendingClient;

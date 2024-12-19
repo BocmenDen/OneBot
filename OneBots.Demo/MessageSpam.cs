@@ -14,7 +14,7 @@ namespace OneBots.Demo
         private readonly SingleMessageQueue<int, TUser> _singleMessageFilter;
         private readonly BlackList<TUser> _blackList;
         private readonly ILogger _logger;
-        private Func<ReceptionClient<TUser>, Task>? _action;
+        private Func<UpdateContext<TUser>, Task>? _action;
         private readonly TimeSpan _banTime;
 
         public MessageSpam(
@@ -40,12 +40,12 @@ namespace OneBots.Demo
             _banTime=configuration.GetValue<TimeSpan?>("spam_timeBan") ?? TimeSpan.FromMinutes(5);
         }
 
-        public void Init(Func<ReceptionClient<TUser>, Task> action)
+        public void Init(Func<UpdateContext<TUser>, Task> action)
         {
             _action = action;
         }
 
-        public async void HandleCommand(ReceptionClient<TUser> updateData)
+        public async void HandleCommand(UpdateContext<TUser> updateData)
         {
             if (_blackList.GetSpamState(updateData).IsSpam() ||
                 (await _singleMessageFilter.CheckMessageSpamStatus(updateData, "Пожалуйста, подождите немного! ✨ Ваше сообщение обрабатывается… ⚙️")).IsSpam()
@@ -59,7 +59,7 @@ namespace OneBots.Demo
             _singleMessageFilter.UnregisterEvent(updateData);
         }
 
-        private async Task HandleMessage(ReceptionClient<TUser> updateData)
+        private async Task HandleMessage(UpdateContext<TUser> updateData)
         {
             if (_action == null) return;
             try

@@ -10,18 +10,18 @@ namespace OneBot.SpamBroker
         private readonly ConcurrentDictionary<int, DateTime> _blackList = new();
         public int Count => _blackList.Count;
 
-        public StateSpam GetSpamState(ReceptionClient<TUser> message)
+        public StateSpam GetSpamState(UpdateContext<TUser> context)
         {
             var now = DateTime.Now;
-            if (_blackList.TryGetValue(message.User.Id, out DateTime date))
+            if (_blackList.TryGetValue(context.User.Id, out DateTime date))
             {
                 if (date <= now)
                 {
-                    _blackList.TryRemove(message.User.Id, out _);
-                    logger?.LogInformation("Пользователь [{user}] удалён из чёрного списка", message.User);
+                    _blackList.TryRemove(context.User.Id, out _);
+                    logger?.LogInformation("Пользователь [{user}] удалён из чёрного списка", context.User);
                     return StateSpam.Allowed;
                 }
-                logger?.LogWarning("Пользователь [{user}] не смотря на блокировку продолжает слать сообщения", message.User);
+                logger?.LogWarning("Пользователь [{user}] не смотря на блокировку продолжает слать сообщения", context.User);
                 return StateSpam.Forbidden;
             }
             return StateSpam.Allowed;
