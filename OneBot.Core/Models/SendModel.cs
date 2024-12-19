@@ -2,7 +2,7 @@
 
 namespace OneBot.Models
 {
-    public record class SendingClient : CollectionBotParameters
+    public record class SendModel : CollectionBotParameters
     {
         private IReadOnlyList<MediaSource>? _medias;
 
@@ -15,9 +15,9 @@ namespace OneBot.Models
             set => _medias = (value?.Any() ?? false) ? value : null;
         }
 
-        public static implicit operator SendingClient(string text) => new() { Message = text };
-        public static implicit operator SendingClient(StringBuilder builder) => builder.ToString();
+        public static implicit operator SendModel(string text) => new() { Message = text };
+        public static implicit operator SendModel(StringBuilder builder) => builder.ToString();
 
-        public static SendingClient operator +(SendingClient sending, string text) => sending.Message += text;
+        public static SendModel operator +(SendModel sending, string text) => sending.Message += text;
     }
 }

@@ -6,7 +6,7 @@ using System.Collections.Concurrent;
 namespace OneBot.SpamBroker
 {
     public class SingleMessageQueue<TValue, TUser>(
-            Func<ReceptionClient<TUser>, TValue> getValue,
+            Func<UpdateContext<TUser>, TValue> getValue,
             ILogger<SingleMessageQueue<TValue, TUser>>? logger
         ) : ISpam<TUser>
         where TUser : BaseUser
@@ -14,34 +14,34 @@ namespace OneBot.SpamBroker
     {
         private readonly ConcurrentDictionary<TValue, bool> _eventHistory = new();
 
-        public StateSpam GetSpamState(ReceptionClient<TUser> message)
+        public StateSpam GetSpamState(UpdateContext<TUser> context)
         {
-            var key = getValue(message);
+            var key = getValue(context);
             if (_eventHistory.TryGetValue(key, out bool isSend))
             {
                 if (isSend)
                 {
-                    logger?.LogWarning(Consts.EventIdForbidden, Consts.LogForbidden, message.User);
+                    logger?.LogWarning(Consts.EventIdForbidden, Consts.LogForbidden, context.User);
                     return StateSpam.Forbidden;
                 }
                 else
                 {
                     _eventHistory.TryUpdate(key, true, false);
-                    logger?.LogInformation(Consts.EventIdForbiddenFirst, Consts.LogForbiddenFirst, message.User);
+                    logger?.LogInformation(Consts.EventIdForbiddenFirst, Consts.LogForbiddenFirst, context.User);
                     return StateSpam.ForbiddenFirst;
                 }
             }
             return StateSpam.Allowed;
         }
 
-        public void RegisterEvent(ReceptionClient<TUser> message)
+        public void RegisterEvent(UpdateContext<TUser> context)
         {
-            _eventHistory.TryAdd(getValue(message), false);
+            _eventHistory.TryAdd(getValue(context), false);
         }
 
-        public void UnregisterEvent(ReceptionClient<TUser> message)
+        public void UnregisterEvent(UpdateContext<TUser> context)
         {
-            _eventHistory.TryRemove(getValue(message), out bool _);
+            _eventHistory.TryRemove(getValue(context), out bool _);
         }
 
         public Metric GetMetric()

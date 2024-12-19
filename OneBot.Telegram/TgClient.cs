@@ -27,7 +27,7 @@ namespace OneBot.Tg
         private readonly TDB _database;
 
         public int Id { get; private set; }
-        public event Action<ReceptionClient<TUser>>? Update;
+        public event Action<UpdateContext<TUser>>? Update;
 
         public TgClient(IConfiguration configuration, IDbContextFactory<TDB> factoryDB, ILogger<TgClient<TUser, TDB>>? logger = null, ReceiverOptions? receiverOptions = null)
         {
@@ -49,8 +49,8 @@ namespace OneBot.Tg
             await task;
         }
 
-        public void RegisterUpdateHadler(Action<ReceptionClient<TUser>> action) => Update += action;
-        public void UnregisterUpdateHadler(Action<ReceptionClient<TUser>> action) => Update -= action;
+        public void RegisterUpdateHadler(Action<UpdateContext<TUser>> action) => Update += action;
+        public void UnregisterUpdateHadler(Action<UpdateContext<TUser>> action) => Update -= action;
 
         private Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
@@ -58,22 +58,23 @@ namespace OneBot.Tg
             if (!TryGetInfoUser(update, out long? chatId, out TgUser<TUser>? user)) return Task.CompletedTask;
             var media = GetMedias(update, out var flagType);
             var command = TgClient<TUser, TDB>.ParseCommand(update?.Message?.Text ?? update?.Message?.Caption);
-            Update?.Invoke(new ReceptionClient<TUser>(this, user!.User,
-                (d, r) => Send(user, d, r),
-                TgClient<TUser, TDB>.GetReceptionType(update!) | flagType | (command == null ? ReceptionType.None : ReceptionType.Command)
-                )
-            {
-                OriginalMessage = update,
-                Message = update?.Message?.Text ?? update?.Message?.Caption,
-                Medias = media,
-                Command = command
-            });
+            Update?.Invoke(new UpdateContext<TUser>(this, user!.User,
+                (d, _, r) => Send(d, user, r),
+                new UpdateModel()
+                {
+                    UpdateType = TgClient<TUser, TDB>.GetReceptionType(update!) | flagType | (command == null ? UpdateType.None : UpdateType.Command),
+                    OriginalMessage = update,
+                    Message = update?.Message?.Text ?? update?.Message?.Caption,
+                    Medias = media,
+                    Command = command
+                }
+                ));
             return Task.CompletedTask;
         }
 
-        public async Task Send(TgUser<TUser> user, SendingClient sendingClient, ReceptionClient<TUser>? reception = null)
+        public async Task Send(SendModel send, TgUser<TUser> user, UpdateContext<TUser>? context = null)
         {
-            if (sendingClient.Message == null)
+            if (send.Message == null)
             {
                 _logger?.LogWarning(_eventId, "Поддерживается пока только отправка текстовых сообщений");
                 return;
@@ -82,41 +83,41 @@ namespace OneBot.Tg
             async Task sendMessageSaveId(Func<Task<Message>> action)
             {
                 var message = await action();
-                sendingClient[TgClient.MessegesToEdit] = message.Id;
-                if (reception != null) reception[TgClient.MessegesToEdit] = message.Id;
+                send[TgClient.MessegesToEdit] = message.Id;
+                if (context != null) context.Update[TgClient.MessegesToEdit] = message.Id;
             }
 
-            if (sendingClient.Medias != null)
+            if (send.Medias != null)
             {
-                foreach (var doc in sendingClient.Medias)
+                foreach (var doc in send.Medias)
                 {
                     using var file = await doc.GetFile();
                     Message? message;
                     if (doc.Name?.Contains(".mp4") ?? false)
                     {
-                        message = await BotClient.SendVideo(user, file, caption: sendingClient.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(sendingClient), parseMode: sendingClient.GetParseMode());
+                        message = await BotClient.SendVideo(user, file, caption: send.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(send), parseMode: send.GetParseMode());
                         doc[TgClient.KeyMediaSourceFileId] = message.Video!.FileId;
                     }
                     else
                     {
-                        message = await BotClient.SendDocument(user, file, caption: sendingClient.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(sendingClient), parseMode: sendingClient.GetParseMode());
+                        message = await BotClient.SendDocument(user, file, caption: send.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(send), parseMode: send.GetParseMode());
                         doc[TgClient.KeyMediaSourceFileId] = message.Document!.FileId;
                     }
                 }
                 return;
             }
 
-            if (sendingClient.ContainsKey(TgClient.MessegesToEdit) && sendingClient.Inline == null && sendingClient.Keyboard == null)
-                await EditMessage(user, (int)sendingClient[TgClient.MessegesToEdit], sendingClient, reception, sendMessageSaveId);
+            if (send.ContainsKey(TgClient.MessegesToEdit) && send.Inline == null && send.Keyboard == null)
+                await EditMessage(user, (int)send[TgClient.MessegesToEdit], send, context, sendMessageSaveId);
             else
-                await sendMessageSaveId(() => BotClient.SendMessage(user, sendingClient.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(sendingClient), parseMode: sendingClient.GetParseMode()));
+                await sendMessageSaveId(() => BotClient.SendMessage(user, send.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(send), parseMode: send.GetParseMode()));
         }
 
-        private static IReplyMarkup? GetReplyMarkup(SendingClient sendingClient)
+        private static IReplyMarkup? GetReplyMarkup(SendModel sendingClient)
             => (IReplyMarkup?)sendingClient.Inline.CreateTgInline() ?? sendingClient.Keyboard.CreateTgReply();
 
 #pragma warning disable IDE0060 // Удалите неиспользуемый параметр
-        private Task EditMessage(TgUser<TUser> user, int oldMessage, SendingClient sendingClient, ReceptionClient<TUser>? reception, Func<Func<Task<Message>>, Task> sendMessageSaveId)
+        private Task EditMessage(TgUser<TUser> user, int oldMessage, SendModel sendingClient, UpdateContext<TUser>? context, Func<Func<Task<Message>>, Task> sendMessageSaveId)
 #pragma warning restore IDE0060 // Удалите неиспользуемый параметр
         {
             return sendMessageSaveId(() => BotClient.EditMessageText(user, oldMessage, sendingClient.Message!, replyMarkup: sendingClient.Inline.CreateTgInline(), parseMode: sendingClient.GetParseMode()));
@@ -167,9 +168,9 @@ namespace OneBot.Tg
             return null; // ChatId не найден
         }
 
-        public ButtonSearch? GetIndexButton(ReceptionClient<TUser> client, ButtonsSend buttonsSend)
+        public ButtonSearch? GetIndexButton(UpdateContext<TUser> context, ButtonsSend buttonsSend)
         {
-            if (client.OriginalMessage is not Update update) return null;
+            if (context.Update.OriginalMessage is not Update update) return null;
             for (int i = 0; i < buttonsSend.Buttons.Count; i++)
             {
                 for (int j = 0; j < buttonsSend.Buttons[i].Count; j++)
@@ -183,22 +184,22 @@ namespace OneBot.Tg
             return null;
         }
 
-        private static ReceptionType GetReceptionType(Update update)
+        private static UpdateType GetReceptionType(Update update)
         {
-            ReceptionType receptionType = update.Type switch
+            UpdateType receptionType = update.Type switch
             {
-                Telegram.Bot.Types.Enums.UpdateType.Message => ReceptionType.Message,
-                Telegram.Bot.Types.Enums.UpdateType.InlineQuery => ReceptionType.Inline,
-                Telegram.Bot.Types.Enums.UpdateType.CallbackQuery => ReceptionType.Keyboard,
-                _ => ReceptionType.None
+                Telegram.Bot.Types.Enums.UpdateType.Message => UpdateType.Message,
+                Telegram.Bot.Types.Enums.UpdateType.InlineQuery => UpdateType.Inline,
+                Telegram.Bot.Types.Enums.UpdateType.CallbackQuery => UpdateType.Keyboard,
+                _ => UpdateType.None
             };
             return receptionType;
         }
 
-        private List<MediaSource>? GetMedias(Update update, out ReceptionType receptionType)
+        private List<MediaSource>? GetMedias(Update update, out UpdateType receptionType)
         {
             List<MediaSource> mediaSources = [];
-            receptionType = ReceptionType.None;
+            receptionType = UpdateType.None;
             if (update.Message?.Document != null)
                 AddMedia(mediaSources, update.Message.Document, update.Message.Document.FileName, update.Message.Document.MimeType);
             else if (update.Message?.Animation != null)
@@ -207,7 +208,7 @@ namespace OneBot.Tg
                 AddMedia(mediaSources, update.Message.Video, update.Message.Video.FileName, update.Message.Video.MimeType);
             if (mediaSources.Count!=0)
             {
-                receptionType = ReceptionType.Media;
+                receptionType = UpdateType.Media;
                 return mediaSources;
             }
             return null;

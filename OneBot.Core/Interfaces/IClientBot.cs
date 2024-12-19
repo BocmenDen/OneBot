@@ -7,11 +7,11 @@ namespace OneBot.Interfaces
     {
         public int Id { get; }
 
-        public void RegisterUpdateHadler(Action<ReceptionClient<TUser>> action);
-        public void UnregisterUpdateHadler(Action<ReceptionClient<TUser>> action);
+        public void RegisterUpdateHadler(Action<UpdateContext<TUser>> action);
+        public void UnregisterUpdateHadler(Action<UpdateContext<TUser>> action);
 
         public Task Run(CancellationToken token = default);
 
-        public ButtonSearch? GetIndexButton(ReceptionClient<TUser> client, ButtonsSend buttonsSend);
+        public ButtonSearch? GetIndexButton(UpdateContext<TUser> context, ButtonsSend buttonsSend);
     }
 }

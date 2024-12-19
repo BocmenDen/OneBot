@@ -5,6 +5,6 @@ namespace OneBot.SpamBroker
 {
     public interface ISpam<TUser> where TUser : BaseUser
     {
-        public StateSpam GetSpamState(ReceptionClient<TUser> message);
+        public StateSpam GetSpamState(UpdateContext<TUser> context);
     }
 }

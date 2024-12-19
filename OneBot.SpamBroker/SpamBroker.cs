@@ -6,7 +6,7 @@ using System.Collections.Concurrent;
 namespace OneBot.SpamBroker
 {
     public class SpamBroker<TValue, TUser>(
-            Func<ReceptionClient<TUser>, TValue> getValue,
+            Func<UpdateContext<TUser>, TValue> getValue,
             int maxEvent, TimeSpan timeWindow,
             ILogger<SpamBroker<TValue, TUser>>? logger
         ) : ISpam<TUser>
@@ -23,10 +23,10 @@ namespace OneBot.SpamBroker
             if (getValue == null) throw new ArgumentNullException(nameof(CheckInit));
         }
 
-        public StateSpam GetSpamState(ReceptionClient<TUser> message)
+        public StateSpam GetSpamState(UpdateContext<TUser> context)
         {
             CheckInit();
-            var identifier = getValue!(message);
+            var identifier = getValue!(context);
             DateTime now = DateTime.UtcNow;
 
             var events = _eventHistory.GetOrAdd(identifier, _ => new ConcurrentQueue<DateTime>());
@@ -34,12 +34,12 @@ namespace OneBot.SpamBroker
             events.Enqueue(now);
             if (events.Count > maxEvent)
             {
-                logger?.LogWarning(Consts.EventIdForbidden, Consts.LogForbidden, message.User);
+                logger?.LogWarning(Consts.EventIdForbidden, Consts.LogForbidden, context.User);
                 return StateSpam.Forbidden;
             }
             else if (events.Count >= maxEvent)
             {
-                logger?.LogWarning(Consts.EventIdForbiddenFirst, Consts.LogForbiddenFirst, message.User);
+                logger?.LogWarning(Consts.EventIdForbiddenFirst, Consts.LogForbiddenFirst, context.User);
                 return StateSpam.ForbiddenFirst;
             }
             return StateSpam.Allowed;
