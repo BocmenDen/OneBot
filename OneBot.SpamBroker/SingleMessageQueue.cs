@@ -1,20 +1,19 @@
 ﻿using Microsoft.Extensions.Logging;
-using OneBot.Base;
-using OneBot.Models;
+using OneBot.Interfaces;
 using System.Collections.Concurrent;
 
 namespace OneBot.SpamBroker
 {
     public class SingleMessageQueue<TValue, TUser>(
-            Func<UpdateContext<TUser>, TValue> getValue,
+            Func<IUpdateContext<TUser>, TValue> getValue,
             ILogger<SingleMessageQueue<TValue, TUser>>? logger
         ) : ISpam<TUser>
-        where TUser : BaseUser
+        where TUser : IUser
         where TValue : notnull
     {
         private readonly ConcurrentDictionary<TValue, bool> _eventHistory = new();
 
-        public StateSpam GetSpamState(UpdateContext<TUser> context)
+        public StateSpam GetSpamState(IUpdateContext<TUser> context)
         {
             var key = getValue(context);
             if (_eventHistory.TryGetValue(key, out bool isSend))
@@ -34,12 +33,12 @@ namespace OneBot.SpamBroker
             return StateSpam.Allowed;
         }
 
-        public void RegisterEvent(UpdateContext<TUser> context)
+        public void RegisterEvent(IUpdateContext<TUser> context)
         {
             _eventHistory.TryAdd(getValue(context), false);
         }
 
-        public void UnregisterEvent(UpdateContext<TUser> context)
+        public void UnregisterEvent(IUpdateContext<TUser> context)
         {
             _eventHistory.TryRemove(getValue(context), out bool _);
         }

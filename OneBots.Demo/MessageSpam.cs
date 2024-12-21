@@ -1,27 +1,27 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using OneBot.Attributes;
-using OneBot.Base;
-using OneBot.Models;
+using OneBot.Interfaces;
 using OneBot.SpamBroker;
 
 namespace OneBots.Demo
 {
-    [Service(Type = ServiceType.Singltone)]
-    public class MessageSpam<TUser> where TUser : BaseUser
+    [Service(ServiceType.Singltone)]
+    public class MessageSpam<TUser> where TUser : IUser
     {
-        private readonly SpamBroker<int, TUser> _spamFilter;
-        private readonly SingleMessageQueue<int, TUser> _singleMessageFilter;
+        private readonly SpamBroker<long, TUser> _spamFilter;
+        private readonly SingleMessageQueue<long, TUser> _singleMessageFilter;
         private readonly BlackList<TUser> _blackList;
         private readonly ILogger _logger;
-        private Func<UpdateContext<TUser>, Task>? _action;
+        private Func<IUpdateContext<TUser>, Task>? _action;
         private readonly TimeSpan _banTime;
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0290:Использовать основной конструктор", Justification = "Нужно бы завести таймер для автоочистки буфферов")]
         public MessageSpam(
             IConfiguration configuration,
             ILogger<MessageSpam<TUser>> logger,
-            ILogger<SpamBroker<int, TUser>> loggerSpam,
-            ILogger<SingleMessageQueue<int, TUser>> loggerSingleSpam,
+            ILogger<SpamBroker<long, TUser>> loggerSpam,
+            ILogger<SingleMessageQueue<long, TUser>> loggerSingleSpam,
             ILogger<BlackList<TUser>> blackListLogger
             )
         {
@@ -40,12 +40,12 @@ namespace OneBots.Demo
             _banTime=configuration.GetValue<TimeSpan?>("spam_timeBan") ?? TimeSpan.FromMinutes(5);
         }
 
-        public void Init(Func<UpdateContext<TUser>, Task> action)
+        public void Init(Func<IUpdateContext<TUser>, Task> action)
         {
             _action = action;
         }
 
-        public async void HandleCommand(UpdateContext<TUser> updateData)
+        public async void HandleCommand(IUpdateContext<TUser> updateData)
         {
             if (_blackList.GetSpamState(updateData).IsSpam() ||
                 (await _singleMessageFilter.CheckMessageSpamStatus(updateData, "Пожалуйста, подождите немного! ✨ Ваше сообщение обрабатывается… ⚙️")).IsSpam()
@@ -59,7 +59,7 @@ namespace OneBots.Demo
             _singleMessageFilter.UnregisterEvent(updateData);
         }
 
-        private async Task HandleMessage(UpdateContext<TUser> updateData)
+        private async Task HandleMessage(IUpdateContext<TUser> updateData)
         {
             if (_action == null) return;
             try
@@ -69,7 +69,7 @@ namespace OneBots.Demo
             catch (Exception ex)
             {
                 _logger.LogError(ex, "При обработке сообщения [{message}] у пользователя [{user}] произошла ошибка", updateData, updateData.User);
-                _ = updateData.Send($"Произошла ошибка при обработке сообщения {ex.Message}");
+                _ = updateData.Reply($"Произошла ошибка при обработке сообщения {ex.Message}");
             }
         }
 

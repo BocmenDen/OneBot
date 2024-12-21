@@ -1,13 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using OneBot.Attributes;
 using OneBot.Base;
 using OneBot.Interfaces;
 using OneBot.Models;
-using OneBot.Utils;
+using OneBot.Services;
 using System.Text.RegularExpressions;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
@@ -16,20 +13,18 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace OneBot.Tg
 {
-    [Service]
-    public partial class TgClient<TUser, TDB> : IClientBot<TUser>, IDisposable where TUser : BaseUser where TDB : BaseDB<TUser>, IDBTg<TUser>
+    [Service(ServiceType.Singltone)]
+    public partial class TgClient<TUser, TDB> : ClientBot<TUser>, IDisposable
+        where TUser : IUser, IUserTgExtension
+        where TDB : IDB
     {
-        private static readonly Regex _parseCommand = GetParseCommandRegex();
         private readonly ILogger<TgClient<TUser, TDB>>? _logger;
         public readonly TelegramBotClient BotClient;
         private readonly ReceiverOptions? _receiverOptions;
         private EventId _eventId;
-        private readonly TDB _database;
+        private readonly DBClientHelper<TUser, TDB, Chat> _database;
 
-        public int Id { get; private set; }
-        public event Action<UpdateContext<TUser>>? Update;
-
-        public TgClient(IConfiguration configuration, IDbContextFactory<TDB> factoryDB, ILogger<TgClient<TUser, TDB>>? logger = null, ReceiverOptions? receiverOptions = null)
+        public TgClient(IConfiguration configuration, DBClientHelper<TUser, TDB, Chat> database, ILogger<TgClient<TUser, TDB>>? logger = null, ReceiverOptions? receiverOptions = null)
         {
             string token = configuration[TgClient.KeySettingTOKEN] ?? throw new Exception("Отсутствует токен для создания клиента Telegram");
             Id = token.GetHashCode();
@@ -37,10 +32,10 @@ namespace OneBot.Tg
             _receiverOptions = receiverOptions;
             _logger = logger;
             _eventId = new EventId(Id);
-            _database=factoryDB.CreateDbContext();
+            _database=database;
         }
 
-        public async Task Run(CancellationToken token = default)
+        public override async Task Run(CancellationToken token = default)
         {
             Task task = BotClient.ReceiveAsync(HandleUpdateAsync, HandleErrorAsync, _receiverOptions, cancellationToken: token);
             string botName = (await BotClient.GetMyName(cancellationToken: token)).Name;
@@ -49,30 +44,28 @@ namespace OneBot.Tg
             await task;
         }
 
-        public void RegisterUpdateHadler(Action<UpdateContext<TUser>> action) => Update += action;
-        public void UnregisterUpdateHadler(Action<UpdateContext<TUser>> action) => Update -= action;
-
         private Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
-            if (Update == null) return Task.CompletedTask;
-            if (!TryGetInfoUser(update, out long? chatId, out TgUser<TUser>? user)) return Task.CompletedTask;
-            var media = GetMedias(update, out var flagType);
-            var command = TgClient<TUser, TDB>.ParseCommand(update?.Message?.Text ?? update?.Message?.Caption);
-            Update?.Invoke(new UpdateContext<TUser>(this, user!.User,
-                (d, _, r) => Send(d, user, r),
+            return HandleUpdate(async () =>
+            {
+                var user = await LoadUser(update);
+                if (user == null) return default;
+                var media = GetMedias(update, out var flagType);
+                var command = TgClient.ParseCommand(update?.Message?.Text ?? update?.Message?.Caption);
+
+                return new UpdateContext<TUser>(this, user!,
                 new UpdateModel()
                 {
-                    UpdateType = TgClient<TUser, TDB>.GetReceptionType(update!) | flagType | (command == null ? UpdateType.None : UpdateType.Command),
+                    UpdateType = TgClient.GetReceptionType(update!) | flagType | (command == null ? UpdateType.None : UpdateType.Command),
                     OriginalMessage = update,
                     Message = update?.Message?.Text ?? update?.Message?.Caption,
                     Medias = media,
                     Command = command
-                }
-                ));
-            return Task.CompletedTask;
+                });
+            });
         }
 
-        public async Task Send(SendModel send, TgUser<TUser> user, UpdateContext<TUser>? context = null)
+        public override async Task Send(TUser user, SendModel send, UpdateModel? updateModel = null)
         {
             if (send.Message == null)
             {
@@ -84,8 +77,10 @@ namespace OneBot.Tg
             {
                 var message = await action();
                 send[TgClient.MessegesToEdit] = message.Id;
-                if (context != null) context.Update[TgClient.MessegesToEdit] = message.Id;
+                if (updateModel != null) updateModel[TgClient.MessegesToEdit] = message.Id;
             }
+
+            var chat = user.GetTgChat();
 
             if (send.Medias != null)
             {
@@ -95,12 +90,12 @@ namespace OneBot.Tg
                     Message? message;
                     if (doc.Name?.Contains(".mp4") ?? false)
                     {
-                        message = await BotClient.SendVideo(user, file, caption: send.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(send), parseMode: send.GetParseMode());
+                        message = await BotClient.SendVideo(chat, file, caption: send.Message!, replyMarkup: TgClient.GetReplyMarkup(send), parseMode: send.GetParseMode());
                         doc[TgClient.KeyMediaSourceFileId] = message.Video!.FileId;
                     }
                     else
                     {
-                        message = await BotClient.SendDocument(user, file, caption: send.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(send), parseMode: send.GetParseMode());
+                        message = await BotClient.SendDocument(chat, file, caption: send.Message!, replyMarkup: TgClient.GetReplyMarkup(send), parseMode: send.GetParseMode());
                         doc[TgClient.KeyMediaSourceFileId] = message.Document!.FileId;
                     }
                 }
@@ -108,28 +103,14 @@ namespace OneBot.Tg
             }
 
             if (send.ContainsKey(TgClient.MessegesToEdit) && send.Inline == null && send.Keyboard == null)
-                await EditMessage(user, (int)send[TgClient.MessegesToEdit], send, context, sendMessageSaveId);
+                await EditMessage(user, (int)send[TgClient.MessegesToEdit], send, updateModel, sendMessageSaveId);
             else
-                await sendMessageSaveId(() => BotClient.SendMessage(user, send.Message!, replyMarkup: TgClient<TUser, TDB>.GetReplyMarkup(send), parseMode: send.GetParseMode()));
+                await sendMessageSaveId(() => BotClient.SendMessage(chat, send.Message!, replyMarkup: TgClient.GetReplyMarkup(send), parseMode: send.GetParseMode()));
         }
 
-        private static IReplyMarkup? GetReplyMarkup(SendModel sendingClient)
-            => (IReplyMarkup?)sendingClient.Inline.CreateTgInline() ?? sendingClient.Keyboard.CreateTgReply();
-
-#pragma warning disable IDE0060 // Удалите неиспользуемый параметр
-        private Task EditMessage(TgUser<TUser> user, int oldMessage, SendModel sendingClient, UpdateContext<TUser>? context, Func<Func<Task<Message>>, Task> sendMessageSaveId)
-#pragma warning restore IDE0060 // Удалите неиспользуемый параметр
+        private Task EditMessage(TUser user, int oldMessage, SendModel sendingClient, UpdateModel? _, Func<Func<Task<Message>>, Task> sendMessageSaveId)
         {
-            return sendMessageSaveId(() => BotClient.EditMessageText(user, oldMessage, sendingClient.Message!, replyMarkup: sendingClient.Inline.CreateTgInline(), parseMode: sendingClient.GetParseMode()));
-        }
-
-        private bool TryGetInfoUser(Update update, out long? chatId, out TgUser<TUser>? user)
-        {
-            user = null;
-            chatId = GetChatId(update);
-            if (chatId == null) return false;
-            user = LoadUser((long)chatId);
-            return true;
+            return sendMessageSaveId(() => BotClient.EditMessageText(user.GetTgChat(), oldMessage, sendingClient.Message!, replyMarkup: sendingClient.Inline.CreateTgInline(), parseMode: sendingClient.GetParseMode()));
         }
 
         private Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
@@ -138,62 +119,32 @@ namespace OneBot.Tg
             return Task.CompletedTask;
         }
 
-        private TgUser<TUser> LoadUser(long chatId)
+        private async Task<TUser?> LoadUser(Update update)
         {
-            var telegramUser = _database.TgUsers.Find(chatId);
-            if (telegramUser != null)
-            {
-                telegramUser.User ??= _database.Users.Find(telegramUser.UserId)!;
-                return telegramUser!;
-            }
-            var user = BaseUserUtil.CreateEmptyUser<TUser>();
-            telegramUser = new TgUser<TUser>(chatId, user);
-            _database.TgUsers.Add(telegramUser);
-            _database.SaveChanges();
-            _logger?.LogInformation(_eventId, "Добавлен новый пользователь [{userTg}]", telegramUser);
-            return telegramUser;
+            var chatId = TgClient.GetChatId(update);
+            if (chatId == null) return default;
+            var findUser = await _database.GetUser(chatId);
+            if (findUser != null)
+                return findUser;
+            findUser = await _database.CreateUser(chatId);
+            _logger?.LogInformation(_eventId, "Добавлен новый пользователь [{userTg}]", findUser);
+            return findUser;
         }
 
-        public static long? GetChatId(Update update)
+        public override ButtonSearch? GetIndexButton(UpdateModel update, ButtonsSend buttonsSend)
         {
-            if (update.Message != null) return update.Message.Chat.Id;
-            if (update.EditedMessage != null) return update.EditedMessage.Chat.Id;
-            if (update.ChannelPost != null) return update.ChannelPost.Chat.Id;
-            if (update.EditedChannelPost != null) return update.EditedChannelPost.Chat.Id;
-            if (update.CallbackQuery != null && update.CallbackQuery.Message != null) return update.CallbackQuery.Message.Chat.Id;
-            if (update.InlineQuery != null && update.InlineQuery.From != null) return update.InlineQuery.From.Id; // Для inline запросов это ID пользователя, не чата!
-            if (update.ChosenInlineResult != null && update.ChosenInlineResult.From != null) return update.ChosenInlineResult.From.Id; // Для chosen inline results это ID пользователя, не чата!
-            if (update.ShippingQuery != null && update.ShippingQuery.From != null) return update.ShippingQuery.From.Id; // ID пользователя
-            if (update.PreCheckoutQuery != null && update.PreCheckoutQuery.From != null) return update.PreCheckoutQuery.From.Id;
-            return null; // ChatId не найден
-        }
-
-        public ButtonSearch? GetIndexButton(UpdateContext<TUser> context, ButtonsSend buttonsSend)
-        {
-            if (context.Update.OriginalMessage is not Update update) return null;
+            if (update.OriginalMessage is not Update updateTg) return null;
             for (int i = 0; i < buttonsSend.Buttons.Count; i++)
             {
                 for (int j = 0; j < buttonsSend.Buttons[i].Count; j++)
                 {
-                    if (buttonsSend.Buttons[i][j].Text == update.Message?.Text || buttonsSend.Buttons[i][j].Text == update.InlineQuery?.Query)
+                    if (buttonsSend.Buttons[i][j].Text == updateTg.Message?.Text || buttonsSend.Buttons[i][j].Text == updateTg.InlineQuery?.Query)
                     {
                         return new ButtonSearch(i, j, buttonsSend.Buttons[i][j]);
                     }
                 }
             }
             return null;
-        }
-
-        private static UpdateType GetReceptionType(Update update)
-        {
-            UpdateType receptionType = update.Type switch
-            {
-                Telegram.Bot.Types.Enums.UpdateType.Message => UpdateType.Message,
-                Telegram.Bot.Types.Enums.UpdateType.InlineQuery => UpdateType.Inline,
-                Telegram.Bot.Types.Enums.UpdateType.CallbackQuery => UpdateType.Keyboard,
-                _ => UpdateType.None
-            };
-            return receptionType;
         }
 
         private List<MediaSource>? GetMedias(Update update, out UpdateType receptionType)
@@ -204,7 +155,7 @@ namespace OneBot.Tg
                 AddMedia(mediaSources, update.Message.Document, update.Message.Document.FileName, update.Message.Document.MimeType);
             else if (update.Message?.Animation != null)
                 AddMedia(mediaSources, update.Message.Animation, update.Message.Animation.FileName, update.Message.Animation.MimeType);
-            else if(update.Message?.Video != null)
+            else if (update.Message?.Video != null)
                 AddMedia(mediaSources, update.Message.Video, update.Message.Video.FileName, update.Message.Video.MimeType);
             if (mediaSources.Count!=0)
             {
@@ -214,7 +165,7 @@ namespace OneBot.Tg
             return null;
         }
 
-        private void AddMedia(List<MediaSource> medias,  FileBase? fileBase, string? fileName, string? mimeType)
+        private void AddMedia(List<MediaSource> medias, FileBase? fileBase, string? fileName, string? mimeType)
         {
             if (fileBase == null) return;
             medias.Add(new MediaSource(async () =>
@@ -234,7 +185,27 @@ namespace OneBot.Tg
             });
         }
 
-        private static string? ParseCommand(string? text)
+        public override void Dispose()
+        {
+            _database.Dispose();
+            GC.SuppressFinalize(this);
+        }
+    }
+
+    public static partial class TgClient
+    {
+        public const string KeySettingTOKEN = "tg_token";
+        public const string MessegesToEdit = "tg_messagesToEdit";
+        public const string KeyParseMode = "tg_parseMode";
+
+        public const string KeyMediaSourceFileId = "tg_fileId";
+
+        private static readonly Regex _parseCommand = GetParseCommandRegex();
+
+        [GeneratedRegex(@"^/(\w+)(@\w+)?$", RegexOptions.Compiled)]
+        internal static partial Regex GetParseCommandRegex();
+
+        internal static string? ParseCommand(string? text)
         {
             if (text == null) return null;
             var match = _parseCommand.Match(text);
@@ -242,23 +213,31 @@ namespace OneBot.Tg
                 return match.Groups[1].Value;
             return null;
         }
-
-        [GeneratedRegex(@"^/(\w+)(@\w+)?$", RegexOptions.Compiled)]
-        private static partial Regex GetParseCommandRegex();
-
-        public void Dispose()
+        internal static UpdateType GetReceptionType(Update update)
         {
-            _database.Dispose();
-            GC.SuppressFinalize(this);
+            UpdateType receptionType = update.Type switch
+            {
+                Telegram.Bot.Types.Enums.UpdateType.Message => UpdateType.Message,
+                Telegram.Bot.Types.Enums.UpdateType.InlineQuery => UpdateType.Inline,
+                Telegram.Bot.Types.Enums.UpdateType.CallbackQuery => UpdateType.Keyboard,
+                _ => UpdateType.None
+            };
+            return receptionType;
         }
-    }
-
-    public static class TgClient
-    {
-        public const string KeySettingTOKEN = "tg_token";
-        public const string MessegesToEdit = "tg_messagesToEdit";
-        public const string KeyParseMode = "tg_parseMode";
-
-        public const string KeyMediaSourceFileId = "tg_fileId";
+        internal static Chat? GetChatId(Update update)
+        {
+            if (update.Message != null) return update.Message.Chat;
+            if (update.EditedMessage != null) return update.EditedMessage.Chat;
+            if (update.ChannelPost != null) return update.ChannelPost.Chat;
+            if (update.EditedChannelPost != null) return update.EditedChannelPost.Chat;
+            if (update.CallbackQuery != null && update.CallbackQuery.Message != null) return update.CallbackQuery.Message.Chat;
+            //if (update.InlineQuery != null && update.InlineQuery.From != null) return update.InlineQuery.From; // Для inline запросов это ID пользователя, не чата!
+            //if (update.ChosenInlineResult != null && update.ChosenInlineResult.From != null) return update.ChosenInlineResult.From; // Для chosen inline results это ID пользователя, не чата!
+            //if (update.ShippingQuery != null && update.ShippingQuery.From != null) return update.ShippingQuery.From; // ID пользователя
+            //if (update.PreCheckoutQuery != null && update.PreCheckoutQuery.From != null) return update.PreCheckoutQuery.From.;
+            return null; // ChatId не найден
+        }
+        internal static IReplyMarkup? GetReplyMarkup(SendModel sendingClient)
+            => (IReplyMarkup?)sendingClient.Inline.CreateTgInline() ?? sendingClient.Keyboard.CreateTgReply();
     }
 }

@@ -1,21 +1,23 @@
 ﻿namespace OneBot.Attributes
 {
     [AttributeUsage(AttributeTargets.Class)]
-    public class ServiceAttribute : Attribute
+    public class ServiceAttribute(string type) : Attribute
     {
-        public ServiceType Type = ServiceType.Singltone;
+        public readonly string LiftimeType = string.IsNullOrWhiteSpace(type) ? throw new ArgumentException(nameof(type)) : type;
+        public ServiceAttribute(ServiceType serviceType) : this(serviceType.ToString()) { }
     }
 
     [AttributeUsage(AttributeTargets.Class)]
     public class ServiceAttribute<T> : ServiceAttribute
     {
+        public ServiceAttribute(ServiceType serviceType) : base(serviceType) { }
+        public ServiceAttribute(string type) : base(type) { }
     }
 
     public enum ServiceType
     {
         Singltone,
         Scoped,
-        AddTransient,
-        DbContextPool
+        Transient
     }
 }

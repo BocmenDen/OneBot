@@ -1,10 +1,9 @@
-﻿using OneBot.Base;
-using OneBot.Models;
+﻿using OneBot.Interfaces;
 
 namespace OneBot.SpamBroker
 {
-    public interface ISpam<TUser> where TUser : BaseUser
+    public interface ISpam<TUser> where TUser : IUser
     {
-        public StateSpam GetSpamState(UpdateContext<TUser> context);
+        public StateSpam GetSpamState(IUpdateContext<TUser> context);
     }
 }

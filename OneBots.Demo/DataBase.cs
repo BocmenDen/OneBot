@@ -1,19 +1,23 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using OneBot.Attributes;
-using OneBot.Base;
-using OneBot.Tg;
+using OneBot.EfUserDb;
+using OneBot.Interfaces;
 
 namespace OneBots.Demo
 {
-    [Service(Type = ServiceType.DbContextPool)]
-    public class DataBase(DbContextOptions options) : BaseDB<BaseUser>(options), IDBTg<BaseUser>
+    [DB]
+    public class DataBase(DbContextOptions options) : DbContext(options), IDBUser<User, long>
     {
-        public DbSet<TgUser<BaseUser>> TgUsers { get; set; } = null!;
+        public DbSet<User> Users { get; set; } = null!;
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        public async Task<User> CreateUser(long parameter)
         {
-            base.OnModelCreating(modelBuilder);
-            modelBuilder.ConfigurateDBTg<BaseUser>();
+            User user = new() { Id = parameter };
+            var e = Users.Add(user);
+            await SaveChangesAsync();
+            e.State = EntityState.Detached;
+            return user;
         }
+
+        public Task<User?> GetUser(long parameter) => Users.FindAsync(parameter).AsTask();
     }
 }

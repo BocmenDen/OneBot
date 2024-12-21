@@ -1,6 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
-using OneBot.Base;
-using OneBot.Extensions;
+﻿using OneBot.Extensions;
 using OneBot.Models;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
@@ -9,17 +7,6 @@ namespace OneBot.Tg
 {
     public static class TgClientExtensions
     {
-        public static TgUser<TUser>? GetTGUser<TUser>(this IDBTg<TUser> db, long chatId) where TUser : BaseUser
-            => db.TgUsers.AsNoTracking().Include(x => x.User).FirstOrDefault(x => x.ChatId == chatId);
-
-        public static ModelBuilder ConfigurateDBTg<TUser>(this ModelBuilder modelBuilder) where TUser : BaseUser
-        {
-            modelBuilder.Entity<TgUser<TUser>>()
-                .HasOne(x => x.User)
-                .WithMany()
-                .HasForeignKey(b => b.UserId);
-            return modelBuilder;
-        }
 
         public static Telegram.Bot.Types.Enums.ParseMode GetParseMode(this SendModel sendingClient)
         {
@@ -80,7 +67,11 @@ namespace OneBot.Tg
             public InputFile File { get; private set; } = file??throw new ArgumentNullException(nameof(file));
             private readonly Action? _disponse = disponse;
 
-            public void Dispose() => _disponse?.Invoke();
+            public void Dispose()
+            {
+                _disponse?.Invoke();
+                GC.SuppressFinalize(this);
+            }
 
             public static implicit operator InputFile(FileTG fileTG) => fileTG.File;
         }

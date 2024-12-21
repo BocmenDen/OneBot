@@ -3,23 +3,23 @@ using OneBot.Interfaces;
 
 namespace OneBot.Models
 {
-    public record class UpdateContext<TUser> where TUser : BaseUser
+    public record class UpdateContext<TUser> : IUpdateContext<TUser> where TUser : IUser
     {
-        public delegate Task SendFunction(SendModel send, TUser user, UpdateContext<TUser>? context);
+        public readonly ClientBot<TUser> Bot;
 
-        private readonly SendFunction _send;
-        public readonly IClientBot<TUser> Client;
-        public readonly TUser User;
-        public readonly UpdateModel Update;
+        public IClientBotFunctions BotFunctions => Bot;
 
-        public UpdateContext(IClientBot<TUser> client, TUser user, SendFunction send, UpdateModel update)
+        public TUser User { get; private set; }
+
+        public UpdateModel Update { get; private set; }
+
+        public Task Reply(SendModel send) => Bot.Send(User, send, Update);
+
+        public UpdateContext(ClientBot<TUser> clientBot, TUser user, UpdateModel update)
         {
-            Client=client??throw new ArgumentNullException(nameof(client));
-            User=user??throw new ArgumentNullException(nameof(user));
-            _send=send??throw new ArgumentNullException(nameof(send));
-            Update=update;
+            Bot=clientBot??throw new ArgumentNullException(nameof(clientBot));
+            User=user;
+            Update=update??throw new ArgumentNullException(nameof(update));
         }
-
-        public Task Send(SendModel send, UpdateContext<TUser>? context = null) => _send(send, User, context);
     }
 }

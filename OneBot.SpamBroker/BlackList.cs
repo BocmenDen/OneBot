@@ -1,16 +1,15 @@
 ﻿using Microsoft.Extensions.Logging;
-using OneBot.Base;
-using OneBot.Models;
+using OneBot.Interfaces;
 using System.Collections.Concurrent;
 
 namespace OneBot.SpamBroker
 {
-    public class BlackList<TUser>(ILogger<BlackList<TUser>>? logger) : ISpam<TUser> where TUser : BaseUser
+    public class BlackList<TUser>(ILogger<BlackList<TUser>>? logger) : ISpam<TUser> where TUser : IUser
     {
-        private readonly ConcurrentDictionary<int, DateTime> _blackList = new();
+        private readonly ConcurrentDictionary<long, DateTime> _blackList = new();
         public int Count => _blackList.Count;
 
-        public StateSpam GetSpamState(UpdateContext<TUser> context)
+        public StateSpam GetSpamState(IUpdateContext<TUser> context)
         {
             var now = DateTime.Now;
             if (_blackList.TryGetValue(context.User.Id, out DateTime date))

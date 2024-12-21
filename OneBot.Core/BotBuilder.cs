@@ -1,6 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OneBot.Attributes;
 using System.Reflection;
@@ -9,40 +7,27 @@ namespace OneBot
 {
     public static class BotBuilder
     {
-        private readonly static object PropertyConnectToDB = "OneBot.BotBuilder_ConnectToDB";
+        public delegate void RegisterService(HostBuilderContext context, IServiceCollection services, Type serviceType, Type implementationType);
 
-        private static readonly MethodInfo AddDbContextPoolMethod = typeof(EntityFrameworkServiceCollectionExtensions).GetMethod(
-                nameof(EntityFrameworkServiceCollectionExtensions.AddDbContextPool),
-                1,
-                BindingFlags.Public | BindingFlags.Static,
-                null,
-                [typeof(IServiceCollection), typeof(Action<DbContextOptionsBuilder>), typeof(int)],
-                null)!;
-        private static readonly MethodInfo AddDbContextFactoryMethod = typeof(EntityFrameworkServiceCollectionExtensions).GetMethod(
-            nameof(EntityFrameworkServiceCollectionExtensions.AddDbContextFactory),
-            1,
-            BindingFlags.Public | BindingFlags.Static,
-            null,
-            [typeof(IServiceCollection), typeof(Action<DbContextOptionsBuilder>), typeof(ServiceLifetime)],
-            null)!;
-
-        public static IHostBuilder CreateDefaultBuilder() => Host.CreateDefaultBuilder();
-
-        public static IHostBuilder RegisterDBContextOptions(this IHostBuilder builder, Action<IConfiguration, DbContextOptionsBuilder> optionsBuilder)
+        private readonly static Dictionary<string, RegisterService> _providersRegistrationService = AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes().SelectMany(t => GetMethods(t))).ToDictionary();
+        private static IEnumerable<KeyValuePair<string, RegisterService>> GetMethods(Type type)
         {
-            builder.Properties[PropertyConnectToDB] = optionsBuilder;
-            return builder;
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+            {
+                var attr = method.GetCustomAttribute<ServiceRegisterProvider>();
+                if (attr == null) continue;
+                var parameters = method.GetParameters();
+                if (parameters.Length == 4 &&
+                    parameters[0].ParameterType == typeof(HostBuilderContext) &&
+                    parameters[1].ParameterType == typeof(IServiceCollection) &&
+                    parameters[2].ParameterType == typeof(Type) &&
+                    parameters[3].ParameterType == typeof(Type))
+                    yield return new(attr.ServiceName, (context, services, serviceType, implementationType) => method.Invoke(null, [context, services, serviceType, implementationType]));
+                yield break;
+            }
         }
-        public static IHostBuilder RegisterDBContextOptions(this IHostBuilder builder, Action<DbContextOptionsBuilder> optionsBuilder)
-            => builder.RegisterDBContextOptions((_, b) => optionsBuilder(b));
 
-        public static IHostBuilder RegisterServices(this IHostBuilder builder, params Assembly?[] assemblies)
-        {
-            if (assemblies == null) return builder;
-            foreach (var assembly in assemblies)
-                builder.RegisterServices(assembly);
-            return builder;
-        }
+        public static IHostBuilder CreateDefaultBuilder() => Host.CreateDefaultBuilder().RegisterServices(typeof(BotBuilder).Assembly);
 
         public static IHostBuilder RegisterServices(this IHostBuilder builder, Assembly? assembly)
         {
@@ -51,44 +36,38 @@ namespace OneBot
             {
                 foreach (var implementationType in assembly.GetTypes())
                 {
-                    Attribute? attr;
+                    ServiceAttribute? attr;
                     Type type = implementationType;
 
-                    attr = implementationType.GetCustomAttribute(typeof(ServiceAttribute<>), false);
+                    attr = (ServiceAttribute?)implementationType.GetCustomAttribute(typeof(ServiceAttribute<>), false);
                     if (attr != null)
                     {
                         type = attr.GetType().GenericTypeArguments[0];
                     }
                     else
                     {
-                        attr = implementationType.GetCustomAttribute(typeof(ServiceAttribute), false);
+                        attr = (ServiceAttribute?)implementationType.GetCustomAttribute(typeof(ServiceAttribute), false);
                         if (attr == null) continue;
                     }
-                    switch (((ServiceAttribute)attr).Type)
-                    {
-                        case ServiceType.Singltone:
-                            services.AddSingleton(type, implementationType);
-                            break;
-                        case ServiceType.Scoped:
-                            services.AddScoped(type, implementationType);
-                            break;
-                        case ServiceType.AddTransient:
-                            services.AddTransient(type, implementationType);
-                            break;
-                        case ServiceType.DbContextPool:
-                            if (context.Properties.TryGetValue(PropertyConnectToDB, out object? value) && value is Action<IConfiguration, DbContextOptionsBuilder> dbBuilder)
-                            {
-                                var method = AddDbContextPoolMethod.MakeGenericMethod(type);
-                                Action<DbContextOptionsBuilder> dbBuilderApplayConfig = (b) => dbBuilder(context.Configuration, b);
-                                method.Invoke(null, [services, dbBuilderApplayConfig, 1024]);
-                                method = AddDbContextFactoryMethod.MakeGenericMethod(type);
-                                method.Invoke(null, [services, dbBuilderApplayConfig, ServiceLifetime.Singleton]);
-                            }
-                            break;
-                    }
+                    var register = _providersRegistrationService[attr.LiftimeType];
+                    register(context, services, type, implementationType);
                 }
             });
             return builder;
         }
+        public static IHostBuilder RegisterServices(this IHostBuilder builder, params Assembly?[] assemblies)
+        {
+            if (assemblies == null) return builder;
+            foreach (var assembly in assemblies)
+                builder.RegisterServices(assembly);
+            return builder;
+        }
+
+        [ServiceRegisterProvider(nameof(ServiceType.Singltone))]
+        internal static void AddSingleton(HostBuilderContext _, IServiceCollection services, Type serviceType, Type implementationType) => services.AddSingleton(serviceType, implementationType);
+        [ServiceRegisterProvider(nameof(ServiceType.Scoped))]
+        internal static void AddScoped(HostBuilderContext _, IServiceCollection services, Type serviceType, Type implementationType) => services.AddScoped(serviceType, implementationType);
+        [ServiceRegisterProvider(nameof(ServiceType.Transient))]
+        internal static void AddTransient(HostBuilderContext _, IServiceCollection services, Type serviceType, Type implementationType) => services.AddTransient(serviceType, implementationType);
     }
 }

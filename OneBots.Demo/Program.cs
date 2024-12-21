@@ -3,13 +3,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OneBot;
-using OneBot.Base;
+using OneBot.EfUserDb;
+using OneBot.Interfaces;
 using OneBot.Tg;
 using OneBots.Demo;
 using System.Reflection;
 
 IHost host = BotBuilder.CreateDefaultBuilder()
-    .ConfigureAppConfiguration(app => app.AddInMemoryCollection([new(TgClient.KeySettingTOKEN, "ВАШ ТОКЕН")]))
+    .ConfigureAppConfiguration(app => app.AddInMemoryCollection([new(TgClient.KeySettingTOKEN, "ВАШ_ТОКЕН")]))
     .RegisterDBContextOptions(b => b.UseSqlite("Data Source=database.db"))
     .RegisterServices(
         Assembly.GetAssembly(typeof(Program)),
@@ -19,12 +20,12 @@ IHost host = BotBuilder.CreateDefaultBuilder()
 
 IServiceProvider service = host.Services;
 
-var tgClient = service.GetRequiredService<TgClient<BaseUser, DataBase>>();
-var spamFilter = host.Services.GetRequiredService<MessageSpam<BaseUser>>();
-tgClient.RegisterUpdateHadler(spamFilter.HandleCommand);
+var tgClient = service.GetRequiredService<TgClient<User, DataBase>>();
+var spamFilter = host.Services.GetRequiredService<MessageSpam<IUser>>();
+tgClient.Update += spamFilter.HandleCommand;
 
 spamFilter.Init(async (context) =>
 {
-    await context.Send(context.Update.Message ?? "Вы отправили пустое сообщение");
+    await context.Reply(context.Update.Message ?? "Вы отправили пустое сообщение");
 });
 tgClient.Run().Wait();

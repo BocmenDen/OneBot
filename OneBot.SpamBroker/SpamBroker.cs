@@ -1,16 +1,15 @@
 ﻿using Microsoft.Extensions.Logging;
-using OneBot.Base;
-using OneBot.Models;
+using OneBot.Interfaces;
 using System.Collections.Concurrent;
 
 namespace OneBot.SpamBroker
 {
     public class SpamBroker<TValue, TUser>(
-            Func<UpdateContext<TUser>, TValue> getValue,
+            Func<IUpdateContext<TUser>, TValue> getValue,
             int maxEvent, TimeSpan timeWindow,
             ILogger<SpamBroker<TValue, TUser>>? logger
         ) : ISpam<TUser>
-        where TUser : BaseUser
+        where TUser : IUser
         where TValue : notnull
     {
         public int MaxEvent => maxEvent;
@@ -20,10 +19,10 @@ namespace OneBot.SpamBroker
 
         private void CheckInit()
         {
-            if (getValue == null) throw new ArgumentNullException(nameof(CheckInit));
+            ArgumentNullException.ThrowIfNull(getValue);
         }
 
-        public StateSpam GetSpamState(UpdateContext<TUser> context)
+        public StateSpam GetSpamState(IUpdateContext<TUser> context)
         {
             CheckInit();
             var identifier = getValue!(context);
